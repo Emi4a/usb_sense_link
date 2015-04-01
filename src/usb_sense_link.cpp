@@ -60,14 +60,16 @@ bool UsbSenseLink::initialize(){
     usb_tio.c_cc[VMIN]  = 1;
     usb_tio.c_cc[VTIME] = 0;
 
-    if(tcsetattr(usb_fd, TCSANOW, &usb_tio) < 0) {
-        logger.perror("init") << "SET ATTR";
-    }
-
+    // first set speed and then set attr!!!
     if(cfsetispeed(&usb_tio, B115200) < 0 || cfsetospeed(&usb_tio, B115200) < 0) {
         logger.perror("init") << "Baud rate";
 
     }
+
+    if(tcsetattr(usb_fd, TCSANOW, &usb_tio) < 0) {
+        logger.perror("init") << "SET ATTR";
+    }
+
     return true;
 }
 
