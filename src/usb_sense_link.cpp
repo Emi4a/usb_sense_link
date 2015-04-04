@@ -70,6 +70,20 @@ bool UsbSenseLink::initialize(){
         logger.perror("init") << "SET ATTR";
     }
 
+    /*
+     * http://arduino.cc/en/Main/ArduinoBoardNano
+     *
+     * When the Nano is connected to either a computer running
+     * Mac OS X or Linux, it resets each time a connection is made
+     * to it from software (via USB). For the following half-second
+     * or so, the bootloader is running on the Nano.
+     *
+     * [...] make sure that the software with which it communicates
+     * waits a second after opening the connection and before sending
+     * this data.
+     */
+    sleep(1);
+
     return true;
 }
 
