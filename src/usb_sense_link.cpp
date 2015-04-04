@@ -7,6 +7,8 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+const int UsbSenseLink::MAX_LOOP_COUNT = 100;
+
 bool UsbSenseLink::initialize(){
     config = getConfig();
     std::string path = config->get<std::string>("path");
@@ -95,6 +97,45 @@ bool UsbSenseLink::deinitialize(){
     return true;
 }
 
+bool UsbSenseLink::readFull(char* buffer, int bufSize) {
+    int result, loopCount = MAX_LOOP_COUNT;
+
+    while(loopCount -- > 0) {
+        result = read(usb_fd, buffer, bufSize);
+        if(result != -1) {
+            // if there was no error while reading
+            // then go further in the buffer
+            buffer += result;
+            bufSize -= result;
+        } else {
+            // we will skip errors here
+        }
+
+        // check if the full bufer was read
+        if(0 == bufSize) return true;
+    }
+
+    // in case MAX_LOOP_COUNT was reached
+    return false;
+}
+
+bool UsbSenseLink::writeFull(const char* buffer, int bufSize) {
+    int result, loopCount = MAX_LOOP_COUNT;
+
+    while(loopCount -- > 0) {
+        result = write(usb_fd, buffer, bufSize);
+        if(result != -1) {
+            buffer += result;
+            bufSize -= result;
+        } else {
+            // skip errors
+        }
+
+        if(0 == bufSize) return true;
+    }
+
+    return false;
+}
 
 bool UsbSenseLink::cycle(){
     sleep(1);
