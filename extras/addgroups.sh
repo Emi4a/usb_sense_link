@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# http://wiki.ubuntuusers.de/Benutzer_und_Gruppen
+# http://www.togaware.com/linux/survivor/Standard_Groups.html
+
 # Execute this shell script once if you do
 # not want to execute core/lms with sudo.
 
