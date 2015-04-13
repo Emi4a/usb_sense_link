@@ -13,7 +13,7 @@ bool UsbSenseLink::initialize(){
     config = getConfig();
     std::string path = config->get<std::string>("path");
 
-    usb_fd = open(path.c_str(), O_RDWR | O_NOCTTY );
+    usb_fd = open(path.c_str(), O_RDWR | O_NOCTTY);
     if (usb_fd < 0) {
         logger.perror("init") << "Open Senseboard";
         return false;
@@ -84,7 +84,7 @@ bool UsbSenseLink::initialize(){
      * waits a second after opening the connection and before sending
      * this data.
      */
-    sleep(1);
+    sleep(3);
 
     return true;
 }
@@ -138,25 +138,25 @@ bool UsbSenseLink::writeFull(const char* buffer, int bufSize) {
 }
 
 bool UsbSenseLink::cycle(){
-    sleep(1);
-    Message m;
+    //usleep(10000);
+    sense_link::Message m;
     static char c = 'A';
     static bool ledValue = false;
-    m.mType = SENSOR_DATA;
-    m.sType = LED;
+    m.mType = sense_link::SENSOR_DATA;
+    m.sType = sense_link::LED;
     m.id = 1;
-    m.sensorData.Led.value = ledValue ? ON : OFF;
+    m.sensorData.Led.value = ledValue ? sense_link::ON : sense_link::OFF;
     ledValue = !ledValue;
 
-    c++;
+    //c++;
     char buffer[4];
     logger.info("cycle") << encode(&m, buffer);
-    if(write(usb_fd, &c, 1) != 1){
+    if(writeFull(&c, 1) != 1){
         logger.perror("cycle");
     } else {
         logger.debug("cycle") << "Send finished:" << c;
     }
-    if(read(usb_fd,buffer,1) != 1){
+    if(readFull(buffer,1) != 1){
         logger.perror("cycle");
     }else {
         logger.debug("cycle") << "Read finished:" << buffer[0];
