@@ -39,6 +39,13 @@ private:
      */
     bool writeFull(const char* buffer, int bufSize);
 
+    bool initUSB();
+
+    bool tooMuchBytesAvailable();
+
+    bool is_valid_fd(int fd);
+
+    std::string path;
     const lms::type::ModuleConfig* config;
     int usb_fd;
     struct termios usb_tio;

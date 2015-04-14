@@ -3,17 +3,65 @@
 
 #include <unistd.h>
 
+#include <cmath>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
-const int UsbSenseLink::MAX_LOOP_COUNT = 100;
+#include <sys/ioctl.h>
+#include <linux/usbdevice_fs.h>
+
+const int UsbSenseLink::MAX_LOOP_COUNT = 1000;
 
 bool UsbSenseLink::initialize(){
     config = getConfig();
-    std::string path = config->get<std::string>("path");
+    path = config->get<std::string>("path");
+    initUSB();
 
-    usb_fd = open(path.c_str(), O_RDWR | O_NOCTTY);
+    return true;
+}
+
+bool UsbSenseLink::is_valid_fd(int fd) {
+    /// Sende Anfrage damit ioctl errno neu setzt
+    int rc = ioctl(fd, USBDEVFS_CONNECTINFO, 0);
+
+    /// Wenn rc != 0 gab es einen Fehler
+    if (rc == 0){
+        return true;
+    }
+
+    logger.perror("is_valid_fd") << "Error in ioctl";
+    /// Haben wir einen Input/Output error? -> usb neu initialisieren
+    if(errno == EIO) {
+        close(usb_fd);
+        while(!initUSB()) {
+            usleep(100);
+        }
+    }
+
+    return false;
+}
+
+bool UsbSenseLink::tooMuchBytesAvailable() {
+    uint bytes_available;
+    ioctl(usb_fd, FIONREAD, &bytes_available);
+    logger.debug("tooMuchBytesAvailable") << bytes_available;
+    if(bytes_available > sizeof(sense_link::Message)) {
+        tcflush(usb_fd, TCIFLUSH);
+        logger.error("tooMuchBytesAvailable") << "FLUSHED BUFFER, TOO MUCH BYTES AVAILABLE!";
+        ioctl(usb_fd, FIONREAD, &bytes_available);
+        logger.debug("tooMuchBytesAvailable") << bytes_available;
+        usleep(10);
+        return true;
+    }
+    usleep(10);
+    return false;
+}
+
+bool UsbSenseLink::initUSB(){
+    logger.warn("initUSB") << "new init";
+    usb_fd = open(path.c_str(), O_RDWR);
     if (usb_fd < 0) {
         logger.perror("init") << "Open Senseboard";
         return false;
@@ -60,7 +108,7 @@ bool UsbSenseLink::initialize(){
     // Inter-character timer off
     //
     usb_tio.c_cc[VMIN]  = 1;
-    usb_tio.c_cc[VTIME] = 0;
+    usb_tio.c_cc[VTIME] = 0; //0
 
     // first set speed and then set attr!!!
     if(cfsetispeed(&usb_tio, B115200) < 0 || cfsetospeed(&usb_tio, B115200) < 0) {
@@ -85,6 +133,8 @@ bool UsbSenseLink::initialize(){
      * this data.
      */
     sleep(3);
+
+    //tcflush(usb_fd,TCIOFLUSH);
 
     return true;
 }
@@ -141,25 +191,53 @@ bool UsbSenseLink::cycle(){
     //usleep(10000);
     sense_link::Message m;
     static char c = 'A';
-    static bool ledValue = false;
+    static int16_t servoValue = 90;
+    static int t = 0;
     m.mType = sense_link::SENSOR_DATA;
-    m.sType = sense_link::LED;
+    m.sType = sense_link::SERVO;
     m.id = 1;
-    m.sensorData.Led.value = ledValue ? sense_link::ON : sense_link::OFF;
-    ledValue = !ledValue;
+    if(servoValue >= 0 && servoValue <= 180){
+        m.sensorData.Servo.angle = servoValue;
+    }else{
+        m.sensorData.Servo.angle = 90;
+    }
+    t++;
+    servoValue = 30* sin(0.01*t) + 90;
 
     //c++;
-    char buffer[4];
-    logger.info("cycle") << encode(&m, buffer);
-    if(writeFull(&c, 1) != 1){
-        logger.perror("cycle");
-    } else {
-        logger.debug("cycle") << "Send finished:" << c;
+    char buffer[5];
+    logger.info("cycle") << encodeMessage(&m, buffer);
+
+    bool timeout = false;
+    if(!tooMuchBytesAvailable()){
+        timeout = !writeFull(buffer, 5);
+        if(timeout){
+            logger.perror("cycle");
+        } else {
+            logger.info("cycle") << "Send finished:" << m.sensorData.Servo.angle;
+        }
     }
-    if(readFull(buffer,1) != 1){
-        logger.perror("cycle");
-    }else {
-        logger.debug("cycle") << "Read finished:" << buffer[0];
+    if(timeout || tooMuchBytesAvailable()) {
+        /// Überprüft oft es einen Input/output Fehler gibt
+        /// Wenn ja --> versuche den USB neu zu initialisieren
+        is_valid_fd(usb_fd);
+    }
+    timeout = false;
+    //tcdrain(usb_fd);
+
+    if(!tooMuchBytesAvailable()){
+        timeout = !readFull(buffer,1);
+        if(timeout){
+            logger.perror("cycle");
+        }else {
+            logger.info("cycle") << decodeMessage(&m, buffer);
+            logger.info("cycle") << "Read finished:" << m.sensorData.Servo.angle;
+        }
+    }
+    if(timeout || tooMuchBytesAvailable()) {
+        /// Überprüft oft es einen Input/output Fehler gibt
+        /// Wenn ja --> versuche den USB neu zu initialisieren
+        is_valid_fd(usb_fd);
     }
     //sleep(10);
     return true;
