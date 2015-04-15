@@ -192,6 +192,7 @@ bool UsbSenseLink::readMessage(sense_link::Message *message) {
     char buffer[255];
 
     bool timeout = false;
+    int bytesDecoded = 0;
 
     if(!tooMuchBytesAvailable()){
         timeout |= ! readFull((char*)&messageLength, 1);
@@ -199,7 +200,13 @@ bool UsbSenseLink::readMessage(sense_link::Message *message) {
         if (timeout) {
             logger.perror("readMessage");
         } else {
-            logger.info("readMessage") << sense_link::decodeMessage(message, buffer);
+            bytesDecoded = sense_link::decodeMessage(message, buffer);
+
+            if(bytesDecoded == -1) {
+                logger.warn("readMessage") << "Wrong checksum";
+            }
+
+            logger.info("readMessage") << bytesDecoded;
             logger.info("readMessage") << "Read finished";
         }
     }
@@ -210,17 +217,18 @@ bool UsbSenseLink::readMessage(sense_link::Message *message) {
         return false;
     }
 
-    return true;
+    // check for wrong checksum
+    return bytesDecoded != -1;
 }
 
 bool UsbSenseLink::writeMessage(const sense_link::Message *message) {
     char buffer[255];
-    std::uint8_t messageLength = sense_link::encodeMessage(message, buffer);
+    std::uint8_t messageLength = sense_link::encodeMessage(message, buffer + 1);
+    buffer[0] = messageLength;
 
     bool timeout = false;
     if(!tooMuchBytesAvailable()){
-        timeout |= ! writeFull((char*)&messageLength, 1);
-        timeout |= ! writeFull(buffer, messageLength);
+        timeout = ! writeFull(buffer, messageLength + 1);
         if(timeout){
             logger.perror("writeMessage");
         } else {
