@@ -236,7 +236,8 @@ bool UsbSenseLink::writeMessage(const sense_link::Message *message) {
         if(timeout){
             logger.perror("writeMessage");
         } else {
-            logger.info("writeMessage") << "Send finished with " << messageLength << " bytes";
+            logger.info("writeMessage") << "Send finished with "
+                                        << (int)messageLength << " bytes";
         }
     }
     if(timeout || tooMuchBytesAvailable()) {
