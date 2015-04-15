@@ -54,5 +54,5 @@ private:
     const lms::type::ModuleConfig* config;
     int usb_fd;
     struct termios usb_tio;
-    sense_link::SenseBoard *senseBoard;
+    const sense_link::SenseBoard *senseBoard;
 };

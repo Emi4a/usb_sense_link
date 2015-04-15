@@ -23,7 +23,7 @@ bool UsbSenseLink::initialize(){
 
     // open sense board data channel
     senseBoard = datamanager()
-                ->writeChannel<sense_link::SenseBoard>(this, "SENSE_BOARD");
+                ->readChannel<sense_link::SenseBoard>(this, "SENSE_BOARD");
     return true;
 }
 
@@ -260,7 +260,7 @@ bool UsbSenseLink::cycle(){
     senseBoard->getSensor(sense_link::MOTOR_VELOCITY,1,m.sensorData);
 
     writeMessage(&m);
-    logger.info("cycle") << "Send finished:" << motorValue << " : " << m.sensorData.MotorVelocity.acceleration;
+    logger.info("cycle") << "Send finished:" << " : " << m.sensorData.MotorVelocity.acceleration;
 
     sense_link::Message in;
     readMessage(&in);
