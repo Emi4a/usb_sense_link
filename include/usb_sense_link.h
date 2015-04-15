@@ -39,6 +39,10 @@ private:
      */
     bool writeFull(const char* buffer, int bufSize);
 
+    bool readMessage(sense_link::Message *message);
+
+    bool writeMessage(const sense_link::Message *message);
+
     bool initUSB();
 
     bool tooMuchBytesAvailable();

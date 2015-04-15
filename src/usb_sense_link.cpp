@@ -187,6 +187,56 @@ bool UsbSenseLink::writeFull(const char* buffer, int bufSize) {
     return false;
 }
 
+bool UsbSenseLink::readMessage(sense_link::Message *message) {
+    std::uint8_t messageLength;
+    char buffer[255];
+
+    bool timeout = false;
+
+    if(!tooMuchBytesAvailable()){
+        timeout |= ! readFull((char*)&messageLength, 1);
+        timeout |= ! readFull(buffer, messageLength);
+        if (timeout) {
+            logger.perror("readMessage");
+        } else {
+            logger.info("readMessage") << sense_link::decodeMessage(message, buffer);
+            logger.info("readMessage") << "Read finished";
+        }
+    }
+    if(timeout || tooMuchBytesAvailable()) {
+        /// Überprüft oft es einen Input/output Fehler gibt
+        /// Wenn ja --> versuche den USB neu zu initialisieren
+        is_valid_fd(usb_fd);
+        return false;
+    }
+
+    return true;
+}
+
+bool UsbSenseLink::writeMessage(const sense_link::Message *message) {
+    char buffer[255];
+    std::uint8_t messageLength = sense_link::encodeMessage(message, buffer);
+
+    bool timeout = false;
+    if(!tooMuchBytesAvailable()){
+        timeout |= ! writeFull((char*)&messageLength, 1);
+        timeout |= ! writeFull(buffer, messageLength);
+        if(timeout){
+            logger.perror("writeMessage");
+        } else {
+            logger.info("writeMessage") << "Send finished";
+        }
+    }
+    if(timeout || tooMuchBytesAvailable()) {
+        /// Überprüft oft es einen Input/output Fehler gibt
+        /// Wenn ja --> versuche den USB neu zu initialisieren
+        is_valid_fd(usb_fd);
+        return false;
+    }
+
+    return true;
+}
+
 bool UsbSenseLink::cycle(){
     //usleep(10000);
     sense_link::Message m;
