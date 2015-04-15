@@ -1,6 +1,7 @@
 #include <sensors.h>
 #include <lms/module.h>
 #include <termios.h>
+#include "sense_board.h"
 
 class UsbSenseLink:public lms::Module {
 public:
@@ -53,4 +54,5 @@ private:
     const lms::type::ModuleConfig* config;
     int usb_fd;
     struct termios usb_tio;
+    sense_link::SenseBoard *senseBoard;
 };

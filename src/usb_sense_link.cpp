@@ -12,6 +12,8 @@
 #include <sys/ioctl.h>
 #include <linux/usbdevice_fs.h>
 
+#include "lms/datamanager.h"
+
 const int UsbSenseLink::MAX_LOOP_COUNT = 1000;
 
 bool UsbSenseLink::initialize(){
@@ -19,6 +21,9 @@ bool UsbSenseLink::initialize(){
     path = config->get<std::string>("path");
     initUSB();
 
+    // open sense board data channel
+    senseBoard = datamanager()
+                ->writeChannel<sense_link::SenseBoard>(this, "SENSE_BOARD");
     return true;
 }
 
@@ -132,7 +137,7 @@ bool UsbSenseLink::initUSB(){
      * waits a second after opening the connection and before sending
      * this data.
      */
-    sleep(3);
+    sleep(5);
 
     //tcflush(usb_fd,TCIOFLUSH);
 
@@ -248,55 +253,32 @@ bool UsbSenseLink::writeMessage(const sense_link::Message *message) {
 bool UsbSenseLink::cycle(){
     //usleep(10000);
     sense_link::Message m;
-    static char c = 'A';
-    static int16_t servoValue = 90;
-    static int t = 0;
+
+    //send MotorVelocity Message
     m.mType = sense_link::SENSOR_DATA;
-    m.sType = sense_link::SERVO;
+    m.sType = sense_link::MOTOR_VELOCITY;
     m.id = 1;
-    if(servoValue >= 0 && servoValue <= 180){
-        m.sensorData.Servo.angle = servoValue;
-    }else{
-        m.sensorData.Servo.angle = 90;
-    }
-    t++;
-    servoValue = 30* sin(0.01*t) + 90;
+    senseBoard->getSensor(sense_link::MOTOR_VELOCITY,1,m.sensorData);
 
-    //c++;
-    char buffer[5];
-    logger.info("cycle") << encodeMessage(&m, buffer);
+    writeMessage(&m);
+    logger.info("cycle") << "Send finished:" << motorValue << " : " << m.sensorData.MotorVelocity.acceleration;
 
-    bool timeout = false;
-    if(!tooMuchBytesAvailable()){
-        timeout = !writeFull(buffer, 5);
-        if(timeout){
-            logger.perror("cycle");
-        } else {
-            logger.info("cycle") << "Send finished:" << m.sensorData.Servo.angle;
-        }
-    }
-    if(timeout || tooMuchBytesAvailable()) {
-        /// Überprüft oft es einen Input/output Fehler gibt
-        /// Wenn ja --> versuche den USB neu zu initialisieren
-        is_valid_fd(usb_fd);
-    }
-    timeout = false;
-    //tcdrain(usb_fd);
+    sense_link::Message in;
+    readMessage(&in);
+    logger.info("cycle") << "Read finished:" << m.mType << " sT: " << m.sType;
 
-    if(!tooMuchBytesAvailable()){
-        timeout = !readFull(buffer,1);
-        if(timeout){
-            logger.perror("cycle");
-        }else {
-            logger.info("cycle") << decodeMessage(&m, buffer);
-            logger.info("cycle") << "Read finished:" << m.sensorData.Servo.angle;
-        }
-    }
-    if(timeout || tooMuchBytesAvailable()) {
-        /// Überprüft oft es einen Input/output Fehler gibt
-        /// Wenn ja --> versuche den USB neu zu initialisieren
-        is_valid_fd(usb_fd);
-    }
-    //sleep(10);
+
+    sense_link::Message fServo;
+    fServo.mType = sense_link::SENSOR_DATA;
+    fServo.sType = sense_link::SERVO;
+    fServo.id = 1;
+    senseBoard->getSensor(sense_link::SERVO,1,fServo.sensorData);
+    writeMessage(&fServo);
+    logger.info("cycle") << "Send finished:" << m.sensorData.Servo.angle;
+
+
+    readMessage(&in);
+    logger.info("cycle") << "Read finished:" << m.mType << " sT: " << m.sType;
+
     return true;
 }
