@@ -66,7 +66,7 @@ bool UsbSenseLink::tooMuchBytesAvailable() {
 
 bool UsbSenseLink::initUSB(){
     logger.warn("initUSB") << "new init";
-    usb_fd = open(path.c_str(), O_RDWR);
+    usb_fd = open(path.c_str(), O_RDWR | O_NDELAY);
     if (usb_fd < 0) {
         logger.perror("init") << "Open Senseboard";
         return false;
