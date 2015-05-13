@@ -250,7 +250,7 @@ bool UsbSenseLink::readMessage(sense_link::Message *message) {
                 logger.warn("readMessage") << "Wrong checksum";
             }
 
-            logger.info("readMessage") << "Read finished with " << bytesDecoded << " bytes";
+            logger.debug("readMessage") << "Read finished with " << bytesDecoded << " bytes";
         }
     }
     if(timeout || tooMuchBytesAvailable()) {
@@ -275,8 +275,8 @@ bool UsbSenseLink::writeMessage(const sense_link::Message *message) {
         if(timeout){
             logger.perror("writeMessage");
         } else {
-            logger.info("writeMessage") << "Send finished with "
-                                        << (int)messageLength << " bytes";
+            logger.debug("writeMessage") << "Send finished with "
+                                         << (int)messageLength << " bytes";
         }
     }
     if(timeout || tooMuchBytesAvailable()) {
