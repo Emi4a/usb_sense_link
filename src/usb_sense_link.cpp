@@ -170,11 +170,24 @@ bool UsbSenseLink::initUSB(){
     return true;
 }
 
+bool UsbSenseLink::deinitUSB()
+{
+    if( usb_fd >= 0 )
+    {
+        close(usb_fd);
+    }
+    
+    usb_fd = -1;
+    
+    return true;
+}
+
+
 bool UsbSenseLink::deinitialize(){
-    logger.info("deinitialize") << "close Arduino";
+    logger.info("deinitialize") << "Close Senseboard";
 
-    close(usb_fd);
-
+    deinitUSB();
+    
     return true;
 }
 

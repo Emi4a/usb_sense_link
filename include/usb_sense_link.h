@@ -45,10 +45,10 @@ private:
     bool writeMessage(const sense_link::Message *message);
 
     bool initUSB();
-
-    bool tooMuchBytesAvailable();
-
+    bool deinitUSB();
+    
     bool is_valid_fd(int fd);
+    bool tooMuchBytesAvailable();
 
     std::string path;
     const lms::type::ModuleConfig* config;
