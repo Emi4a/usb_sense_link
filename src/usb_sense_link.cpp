@@ -1,18 +1,18 @@
-#include <usb_sense_link.h>
 #include <string>
-
-#include <unistd.h>
-
 #include <cmath>
 
+#include <usb_sense_link.h>
+#include "lms/datamanager.h"
+
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 
-#include <sys/ioctl.h>
-#include <linux/usbdevice_fs.h>
-
-#include "lms/datamanager.h"
+#ifndef __APPLE__
+  #include <linux/usbdevice_fs.h>
+#endif
 
 #include <algorithm>
 
@@ -46,8 +46,13 @@ bool UsbSenseLink::initialize(){
 }
 
 bool UsbSenseLink::is_valid_fd(int fd) {
+#ifdef __APPLE__
+    // TODO
+    int rc = 0;
+#else
     /// Sende Anfrage damit ioctl errno neu setzt
     int rc = ioctl(fd, USBDEVFS_CONNECTINFO, 0);
+#endif
 
     /// Wenn rc != 0 gab es einen Fehler
     if (rc == 0){
