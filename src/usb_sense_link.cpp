@@ -155,7 +155,7 @@ bool UsbSenseLink::initUSB(){
      * waits a second after opening the connection and before sending
      * this data.
      */
-    sleep(5);
+    sleep( config->get<unsigned int>("init_sleep", 0) );
 
     //tcflush(usb_fd,TCIOFLUSH);
 
