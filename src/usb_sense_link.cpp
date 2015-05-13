@@ -150,6 +150,9 @@ bool UsbSenseLink::initUSB(){
     if(tcsetattr(usb_fd, TCSANOW, &usb_tio) < 0) {
         logger.perror("init") << "SET ATTR";
     }
+    
+    // Set blocking I/O
+    setBlocking( true );
 
     /*
      * http://arduino.cc/en/Main/ArduinoBoardNano
@@ -182,6 +185,27 @@ bool UsbSenseLink::deinitUSB()
     return true;
 }
 
+bool UsbSenseLink::setBlocking( bool blocking )
+{
+    int flags = fcntl(usb_fd, F_GETFL);
+    if( blocking )
+    {
+        // Set to blocking
+        flags = flags & ( ~O_NONBLOCK );
+    } else {
+        // Set to non-blocking
+        flags = flags | O_NONBLOCK;
+    }
+    
+    auto result = fcntl(usb_fd, F_SETFL, flags);
+    
+    if(result == -1)
+    {
+        logger.perror("setBlocking");
+        return false;
+    }
+    return true;
+}
 
 bool UsbSenseLink::deinitialize(){
     logger.info("deinitialize") << "Close Senseboard";

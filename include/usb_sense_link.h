@@ -49,6 +49,12 @@ private:
     
     bool is_valid_fd(int fd);
     bool tooMuchBytesAvailable();
+    
+    /**
+     * Set file descriptor to blocking I/O mode
+     * @param blocking Whether to block (true) or not (false)
+     */
+    bool setBlocking( bool blocking );
 
     std::string path;
     const lms::type::ModuleConfig* config;
