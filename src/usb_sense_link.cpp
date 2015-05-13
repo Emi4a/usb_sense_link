@@ -23,7 +23,6 @@ bool UsbSenseLink::initialize(){
     path = config->get<std::string>("path");
     std::vector<std::string> c = config->getArray<std::string>("channels");
 
-
     // get all channels with name and sensors from config
     for(uint i = 0; i < c.size(); i++){
         channels[i].name = c[i];
@@ -31,15 +30,19 @@ bool UsbSenseLink::initialize(){
         for(uint j = 0; j < channels[i].sensor.size(); j++){
             channels[i].sensor[j] = static_cast<sense_link::SensorType> (s[j]);
         }
-
     }
     
-    initUSB();
-
     // open sense board data channels
     for(uint i = 0; i < channels.size(); i++){
         senseBoard[i] = datamanager()
                 ->writeChannel<sense_link::SenseBoard>(this, channels[i].name);
+    }
+    
+    logger.info("device") << "Opening USB device at " << path;
+    
+    if(!initUSB())
+    {
+        return false;
     }
 
     return true;
