@@ -48,7 +48,6 @@ private:
     bool setUSBConfig(int fd);
     
     bool is_valid_fd(int fd);
-    bool tooMuchBytesAvailable();
     
     /**
      * Set file descriptor to blocking I/O mode

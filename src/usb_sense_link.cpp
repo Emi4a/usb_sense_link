@@ -76,22 +76,6 @@ bool UsbSenseLink::is_valid_fd(int fd) {
     return false;
 }
 
-bool UsbSenseLink::tooMuchBytesAvailable() {
-    uint bytes_available;
-    ioctl(usb_fd, FIONREAD, &bytes_available);
-    logger.debug("tooMuchBytesAvailable") << bytes_available;
-    if(bytes_available > sizeof(sense_link::Message)) {
-        tcflush(usb_fd, TCIFLUSH);
-        logger.error("tooMuchBytesAvailable") << "FLUSHED BUFFER, TOO MUCH BYTES AVAILABLE!";
-        ioctl(usb_fd, FIONREAD, &bytes_available);
-        logger.debug("tooMuchBytesAvailable") << bytes_available;
-        usleep(10);
-        return true;
-    }
-    usleep(10);
-    return false;
-}
-
 bool UsbSenseLink::initUSB(){
     logger.warn("initUSB") << "new init";
     usb_fd = open(path.c_str(), O_RDWR | O_NDELAY);
@@ -275,26 +259,20 @@ bool UsbSenseLink::readMessage(sense_link::Message *message) {
     bool timeout = false;
     int bytesDecoded = 0;
 
-    if(!tooMuchBytesAvailable()){
-        timeout |= ! readFull((char*)&messageLength, 1);
-        timeout |= ! readFull(buffer, messageLength);
-        if (timeout) {
-            logger.perror("readMessage");
-        } else {
-            bytesDecoded = sense_link::decodeMessage(message, buffer);
-
-            if(bytesDecoded == -1) {
-                logger.warn("readMessage") << "Wrong checksum";
-            }
-
-            logger.debug("readMessage") << "Read finished with " << bytesDecoded << " bytes";
-        }
-    }
-    if(timeout || tooMuchBytesAvailable()) {
-        /// Überprüft oft es einen Input/output Fehler gibt
-        /// Wenn ja --> versuche den USB neu zu initialisieren
+    timeout |= ! readFull((char*)&messageLength, 1);
+    timeout |= ! readFull(buffer, messageLength);
+    if (timeout) {
+        logger.perror("readMessage");
         is_valid_fd(usb_fd);
         return false;
+    } else {
+        bytesDecoded = sense_link::decodeMessage(message, buffer);
+
+        if(bytesDecoded == -1) {
+            logger.warn("readMessage") << "Wrong checksum";
+        }
+
+        logger.debug("readMessage") << "Read finished with " << bytesDecoded << " bytes";
     }
 
     // check for wrong checksum
@@ -307,20 +285,14 @@ bool UsbSenseLink::writeMessage(const sense_link::Message *message) {
     buffer[0] = messageLength;
 
     bool timeout = false;
-    if(!tooMuchBytesAvailable()){
-        timeout = ! writeFull(buffer, messageLength + 1);
-        if(timeout){
-            logger.perror("writeMessage");
-        } else {
-            logger.debug("writeMessage") << "Send finished with "
-                                         << (int)messageLength << " bytes";
-        }
-    }
-    if(timeout || tooMuchBytesAvailable()) {
-        /// Überprüft oft es einen Input/output Fehler gibt
-        /// Wenn ja --> versuche den USB neu zu initialisieren
+    timeout = ! writeFull(buffer, messageLength + 1);
+    if(timeout){
+        logger.perror("writeMessage");
         is_valid_fd(usb_fd);
         return false;
+    } else {
+        logger.debug("writeMessage") << "Send finished with "
+                                     << (int)messageLength << " bytes";
     }
 
     return true;
