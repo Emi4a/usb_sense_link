@@ -1,6 +1,5 @@
 #include <sensors.h>
 #include <lms/module.h>
-#include <termios.h>
 #include "sense_board.h"
 
 class UsbSenseLink:public lms::Module {
@@ -46,15 +45,17 @@ private:
 
     bool initUSB();
     bool deinitUSB();
+    bool setUSBConfig(int fd);
     
     bool is_valid_fd(int fd);
     bool tooMuchBytesAvailable();
     
     /**
      * Set file descriptor to blocking I/O mode
+     * @param fd The usb device descriptor
      * @param blocking Whether to block (true) or not (false)
      */
-    bool setBlocking( bool blocking );
+    bool setBlocking( int fd, bool blocking );
 
     std::string path;
     const lms::type::ModuleConfig* config;
@@ -68,5 +69,4 @@ private:
     };
 
     std::vector<Channel> channels;
-
 };
