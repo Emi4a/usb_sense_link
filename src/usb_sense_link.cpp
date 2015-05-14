@@ -107,7 +107,7 @@ bool UsbSenseLink::initUSB(){
      */
     sleep( config->get<unsigned int>("init_sleep", 0) );
 
-    //tcflush(usb_fd,TCIOFLUSH);
+    tcflush(usb_fd,TCIOFLUSH);
 
     return true;
 }
@@ -154,7 +154,7 @@ bool UsbSenseLink::setUSBConfig(int fd)
     tio.c_cflag |= CS8;
     
     // Ignore modem control lines
-    tio.c_cflag |= (CLOCAL | CREAD | CRTSCTS);
+    tio.c_cflag |= (CLOCAL | CREAD );
     
     //
     // One input byte is enough to return from read()
