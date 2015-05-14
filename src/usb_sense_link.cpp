@@ -171,6 +171,8 @@ bool UsbSenseLink::setUSBConfig(int fd)
     if(tcsetattr(fd, TCSANOW, &tio) < 0) {
         logger.perror("init") << "SET ATTR";
     }
+    
+    return true;
 }
 
 bool UsbSenseLink::deinitUSB()
