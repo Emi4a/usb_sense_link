@@ -46,7 +46,10 @@ bool UsbSenseLink::initialize(){
     {
         return false;
     }
-
+    
+    // Start receiver thread
+    receiverThread = std::thread(&UsbSenseLink::receiver, this);
+    
     return true;
 }
 
@@ -209,6 +212,9 @@ bool UsbSenseLink::deinitialize(){
 
     deinitUSB();
     
+    // Wait for receiver thread to be finished with current cycle
+    receiverThread.join();
+
     return true;
 }
 
@@ -296,6 +302,26 @@ bool UsbSenseLink::writeMessage(const sense_link::Message *message) {
     }
 
     return true;
+}
+
+void UsbSenseLink::receiver()
+{
+    sense_link::Message m;
+    
+    while( usb_fd >= 0 )
+    {
+        if(readMessage(&m))
+        {
+            // TODO
+        }
+        else
+        {
+            // recv_errors++;
+            logger.error("receiverThread") << "Error reading message";
+        }
+    }
+    
+    logger.warn("receiverThread") << "Terminating receiver thread";
 }
 
 bool UsbSenseLink::cycle(){
