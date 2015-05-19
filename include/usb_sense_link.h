@@ -54,5 +54,13 @@ private:
     const lms::type::ModuleConfig* config;
     int usb_fd;
     struct termios usb_tio;
-    const sense_link::SenseBoard *senseBoard;
+    std::vector<sense_link::SenseBoard*> senseBoard;
+
+    struct Channel {
+        std::string name;
+        std::vector<sense_link::SensorType> sensor;
+    };
+
+    std::vector<Channel> channels;
+
 };

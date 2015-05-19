@@ -14,16 +14,34 @@
 
 #include "lms/datamanager.h"
 
+#include <algorithm>
+
 const int UsbSenseLink::MAX_LOOP_COUNT = 1000;
 
 bool UsbSenseLink::initialize(){
     config = getConfig();
     path = config->get<std::string>("path");
+    std::vector<std::string> c = config->getArray<std::string>("channels");
+
+
+    // get all channels with name and sensors from config
+    for(uint i = 0; i < c.size(); i++){
+        channels[i].name = c[i];
+        std::vector<int> s = config->getArray<int>(channels[i].name);
+        for(uint j = 0; j < channels[i].sensor.size(); j++){
+            channels[i].sensor[j] = static_cast<sense_link::SensorType> (s[j]);
+        }
+
+    }
+    
     initUSB();
 
-    // open sense board data channel
-    senseBoard = datamanager()
-                ->readChannel<sense_link::SenseBoard>(this, "SENSE_BOARD");
+    // open sense board data channels
+    for(uint i = 0; i < channels.size(); i++){
+        senseBoard[i] = datamanager()
+                ->writeChannel<sense_link::SenseBoard>(this, channels[i].name);
+    }
+
     return true;
 }
 
@@ -251,34 +269,39 @@ bool UsbSenseLink::writeMessage(const sense_link::Message *message) {
 }
 
 bool UsbSenseLink::cycle(){
-    //usleep(10000);
-    sense_link::Message m;
-
-    //send MotorVelocity Message
-    m.mType = sense_link::SENSOR_DATA;
-    m.sType = sense_link::MOTOR_VELOCITY;
-    m.id = 1;
-    senseBoard->getSensor(sense_link::MOTOR_VELOCITY,1,m.sensorData);
-
-    writeMessage(&m);
-    logger.info("cycle") << "Send finished:" << " : " << m.sensorData.MotorVelocity.acceleration;
 
     sense_link::Message in;
     readMessage(&in);
-    logger.info("cycle") << "Read finished:" << m.mType << " sT: " << m.sType;
+    //logger.info("cycle") << "Read finished:" << in.mType << " sT: " << in.sensor;
 
 
-    sense_link::Message fServo;
-    fServo.mType = sense_link::SENSOR_DATA;
-    fServo.sType = sense_link::SERVO;
-    fServo.id = 1;
-    senseBoard->getSensor(sense_link::SERVO,1,fServo.sensorData);
-    writeMessage(&fServo);
-    logger.info("cycle") << "Send finished:" << m.sensorData.Servo.angle;
+    // iteriere über jeden Datenkanal senseBoard
+    for(uint i = 0; i < senseBoard.size(); i++){
+
+        // check if sensorType is in Datachannel senseBoard[i]
+        if(std::find(channels[i].sensor.begin(), channels[i].sensor.end(), in.sensor)!=channels[i].sensor.end()){
+
+            // set SensorType
+            senseBoard[i]->setSensor(in.sensor, in.id, in.sensorData);
 
 
-    readMessage(&in);
-    logger.info("cycle") << "Read finished:" << m.mType << " sT: " << m.sType;
+        } // end all Datachannels
+    } // end loop
+
+
+    sense_link::Message out;
+    // iteriere über jeden Datenkanal senseBoard
+    for(uint i = 0; i < senseBoard.size(); i++){
+
+            // TODO
+            // set SensorType
+            senseBoard[i]->getActuator(out.actuator, out.id, out.actuatorData);
+            writeMessage(&out);
+
+    } // end loop
+
+
+
 
     return true;
 }
