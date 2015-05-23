@@ -1,1 +1,6 @@
 path = /dev/ttyACM0
+init_sleep = 0
+
+sensorChannels = SENSOR_DATA
+actuatorChannels = ACTUATOR_DATA
+SENSOR_DATA = *
