@@ -1,8 +1,12 @@
 #include <string>
 #include <cmath>
+#include <utility>
 
 #include <usb_sense_link.h>
-#include "lms/datamanager.h"
+#include <lms/datamanager.h>
+#include <lms/extra/time.h>
+
+#include <sense_link/utils.h>
 
 #include <unistd.h>
 #include <sys/types.h>
@@ -16,28 +20,67 @@
   #include <linux/usbdevice_fs.h>
 #endif
 
-#include <algorithm>
-
 const int UsbSenseLink::MAX_LOOP_COUNT = 1000;
 
 bool UsbSenseLink::initialize(){
     config = getConfig();
     path = config->get<std::string>("path");
-    std::vector<std::string> c = config->getArray<std::string>("channels");
-
-    // get all channels with name and sensors from config
-    for(uint i = 0; i < c.size(); i++){
-        channels[i].name = c[i];
-        std::vector<int> s = config->getArray<int>(channels[i].name);
-        for(uint j = 0; j < channels[i].sensor.size(); j++){
-            channels[i].sensor[j] = static_cast<sense_link::SensorType> (s[j]);
+    
+    // Init sensor channels
+    for( const auto& channel : config->getArray<std::string>("sensorChannels") )
+    {
+        // Open channel
+        logger.info() << "Initializing sensor channel '" << channel << "'";
+        sensorChannels[ channel ] = datamanager()->writeChannel<sense_link::Sensors>(this, channel);
+        
+        for( const auto& sensor : config->getArray<std::string>( channel ) )
+        {
+            if( sensor == "*" )
+            {
+                // Wildcard matching: All sensors should be added to this channel
+                logger.info(channel) << "Channel is configured as wildcard channel";
+                
+                std::underlying_type<sense_link::SensorType>::type i = 0;
+                auto end = static_cast< std::underlying_type<sense_link::SensorType>::type >( sense_link::SensorType::__END__ );
+                for(; i < end; i++ )
+                {
+                    // Iterate over all possible sensor types
+                    auto sensorType = static_cast<sense_link::SensorType>( i );
+                    sensorChannelsMap[ sensorType ].insert(channel);
+                }
+                break;
+            }
+            
+            // Add all sensor -> channel mappings
+            logger.info(channel) << "Adding sensor '" << sensor << "'";
+            sense_link::SensorType sensorType;
+            if(sense_link::Utils::sensorTypeFromName( sensor, sensorType ))
+            {
+                sensorChannelsMap[ sensorType ].insert(channel);
+            }
+            else
+            {
+                logger.error(channel) << "Unknown sensor type '" << sensor << "'";
+            }
         }
     }
     
-    // open sense board data channels
-    for(uint i = 0; i < channels.size(); i++){
-        senseBoard[i] = datamanager()
-                ->writeChannel<sense_link::SenseBoard>(this, channels[i].name);
+    if( sensorChannels.size() == 0 )
+    {
+        logger.warn() << "No sensor channels defined!";
+    }
+    
+    // Init actuator channels
+    for( const auto& channel : config->getArray<std::string>("actuatorChannels") )
+    {
+        // Open channel
+        logger.info() << "Initializing actuator channel '" << channel << "'";
+        actuatorChannels[ channel ] = datamanager()->writeChannel<sense_link::Actuators>(this, channel);
+    }
+    
+    if( actuatorChannels.size() == 0 )
+    {
+        logger.warn() << "No actuator channels defined!";
     }
     
     logger.info("device") << "Opening USB device at " << path;
@@ -92,7 +135,11 @@ bool UsbSenseLink::initUSB(){
     
     // Set blocking I/O
     setBlocking( usb_fd, true );
-
+    
+    // Reset sequence counters
+    sendingSequence     = 1; // First sequence id should be 1
+    receivingSequence   = 0; // We haven't received anything and are expecting "1" next
+    
     /*
      * http://arduino.cc/en/Main/ArduinoBoardNano
      *
@@ -312,54 +359,114 @@ void UsbSenseLink::receiver()
     
     while( usb_fd >= 0 )
     {
-        if(readMessage(&m))
+        if(!readMessage(&m))
         {
-            // TODO
+            continue;
         }
-        else
+        
+        // Check valid seqence number
+        checkSequence( m.sequence );
+        
+        switch( m.message )
         {
-            // recv_errors++;
-            logger.error("receiverThread") << "Error reading message";
+            case sense_link::MessageType::SENSOR_DATA:
+                // TODO: convert timestamp
+                receivingSensorsMutex.lock();
+                receivingSensors.add( m.sensor, m.id, sense_link::SensorMeasurement( m.sensorData, lms::extra::PrecisionTime::now() ) );
+                receivingSensorsMutex.unlock();
+                break;
+            case sense_link::MessageType::ERROR:
+                // TODO: error handling
+                break;
+            case sense_link::MessageType::TIME:
+                // TODO: time syncing
+                break;
+            default:
+                logger.warn("receiver") << "Unexpected message type " << uint32_t( m.message );
+                break;
         }
     }
     
     logger.warn("receiverThread") << "Terminating receiver thread";
 }
 
+uint8_t UsbSenseLink::getSequence()
+{
+    return sendingSequence++;
+}
+
+uint8_t UsbSenseLink::checkSequence( uint8_t sequence )
+{
+    // Calculate lost packets
+    uint8_t lost = ( sequence - receivingSequence ) - 1;
+    
+    if( lost > 0 )
+    {
+        logger.warn("sequence") << "Lost " << uint32_t(lost) << " messages from slave";
+    }
+    
+    // Update sequence counter
+    receivingSequence = sequence;
+    
+    return lost;
+}
+
 bool UsbSenseLink::cycle(){
 
-    sense_link::Message in;
-    readMessage(&in);
-    //logger.info("cycle") << "Read finished:" << in.mType << " sT: " << in.sensor;
+    // Iterate over available actuator data and send
+    sense_link::Message msg;
+    for( const auto& channel : actuatorChannels )
+    {
+        for( const auto& data : *(channel.second) )
+        {
+            msg.message         = sense_link::MessageType::ACTUATOR;
+            msg.actuator        = data.first.first;  // Actuator type
+            msg.id              = data.first.second; // Actuator id
+            msg.sequence        = getSequence();
+            msg.actuatorData    = data.second;       // Actuator data payload
+            
+            writeMessage(&msg);
+        }
+    }
+    
+    // Clear actuator data
+    for( auto& it : actuatorChannels )
+    {
+        it.second->clear();
+    }
+    
+    // Clear sensor channels
+    for( auto& it : sensorChannels )
+    {
+        it.second->clear();
+    }
 
-
-    // iteriere über jeden Datenkanal senseBoard
-    for(uint i = 0; i < senseBoard.size(); i++){
-
-        // check if sensorType is in Datachannel senseBoard[i]
-        if(std::find(channels[i].sensor.begin(), channels[i].sensor.end(), in.sensor)!=channels[i].sensor.end()){
-
-            // set SensorType
-            senseBoard[i]->setSensor(in.sensor, in.id, in.sensorData);
-
-
-        } // end all Datachannels
-    } // end loop
-
-
-    sense_link::Message out;
-    // iteriere über jeden Datenkanal senseBoard
-    for(uint i = 0; i < senseBoard.size(); i++){
-
-            // TODO
-            // set SensorType
-            senseBoard[i]->getActuator(out.actuator, out.id, out.actuatorData);
-            writeMessage(&out);
-
-    } // end loop
-
-
-
-
+    // START Copy temporary sensordata
+    receivingSensorsMutex.lock();
+    
+    // Sort the temp data into the specific channels
+    for( const auto& it : receivingSensors )
+    {
+        auto sensorType = it.first.first;
+        auto sensorId   = it.first.second;
+        if( sensorChannelsMap.find( sensorType ) == sensorChannelsMap.end() )
+        {
+            // SensorType not found in any mapping
+            logger.warn() << "Received sensor message for SensorType " << uint32_t(sensorType) << " / SensorID " << sensorId;
+            continue;
+        }
+        
+        for( const auto& ch : sensorChannelsMap[ sensorType ] )
+        {
+            for( const auto& data : it.second )
+            {
+                sensorChannels[ ch ]->add( sensorType, sensorId, data );
+            }
+        }
+    }
+    receivingSensors.clear();
+    receivingSensorsMutex.unlock();
+    // END copy sensordata
+    
     return true;
 }
