@@ -377,6 +377,7 @@ void UsbSenseLink::receiver()
                 break;
             case sense_link::MessageType::ERROR:
                 // TODO: error handling
+                logger.error("SENSEBOARD_ERROR") << m.error.code;
                 break;
             case sense_link::MessageType::TIME:
                 // TODO: time syncing
