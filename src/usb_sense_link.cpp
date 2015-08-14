@@ -99,21 +99,26 @@ bool UsbSenseLink::initialize(){
 
 bool UsbSenseLink::is_valid_fd(int fd) {
 #ifdef __APPLE__
-    // TODO
-    int rc = 0;
+    // Try to read message
+    char _buffer = 0;
+    int result = read(usb_fd, &_buffer, 1);
+    
+    if(result == 1) {
+        return true;
+    }
 #else
     /// Sende Anfrage damit ioctl errno neu setzt
     int rc = ioctl(fd, USBDEVFS_CONNECTINFO, 0);
-#endif
-
+    
     /// Wenn rc != 0 gab es einen Fehler
     if (rc == 0){
         return true;
     }
-
-    logger.perror("is_valid_fd") << "Error in ioctl";
+#endif
+    
+    logger.perror("is_valid_fd") << "Error in ioctl: Trying to reconnect";
     /// Haben wir einen Input/Output error? -> usb neu initialisieren
-    if(errno == EIO) {
+    if(errno == EIO || errno == EBADF || errno == ENXIO) {
         close(fd);
         while(!initUSB()) {
             usleep(100);
@@ -124,7 +129,6 @@ bool UsbSenseLink::is_valid_fd(int fd) {
 }
 
 bool UsbSenseLink::initUSB(){
-    logger.warn("initUSB") << "new init";
     usb_fd = open(path.c_str(), O_RDWR | O_NDELAY);
     if (usb_fd < 0) {
         logger.perror("init") << "Open Senseboard";
@@ -156,6 +160,8 @@ bool UsbSenseLink::initUSB(){
     sleep( config->get<unsigned int>("init_sleep", 0) );
 
     tcflush(usb_fd,TCIOFLUSH);
+    
+    logger.info("init") << "Initialized SenseLink connection";
 
     return true;
 }
