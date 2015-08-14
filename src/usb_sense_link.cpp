@@ -91,6 +91,7 @@ bool UsbSenseLink::initialize(){
     }
     
     // Start receiver thread
+    shouldStopReceiver = false;
     receiverThread = std::thread(&UsbSenseLink::receiver, this);
     
     return true;
@@ -258,11 +259,15 @@ bool UsbSenseLink::setBlocking( int fd, bool blocking )
 
 bool UsbSenseLink::deinitialize(){
     logger.info("deinitialize") << "Close Senseboard";
-
-    deinitUSB();
+    
+    // Set flag to stop receiver
+    shouldStopReceiver = true;
     
     // Wait for receiver thread to be finished with current cycle
     receiverThread.join();
+    
+    // Deinit interface properly
+    deinitUSB();
 
     return true;
 }
@@ -357,7 +362,7 @@ void UsbSenseLink::receiver()
 {
     sense_link::Message m;
     
-    while( usb_fd >= 0 )
+    while( usb_fd >= 0 && !shouldStopReceiver )
     {
         if(!readMessage(&m))
         {

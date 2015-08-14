@@ -103,6 +103,9 @@ private:
     //! Receiver thread reading sensor data in the background
     std::thread receiverThread;
     
+    //! Flag whether to stop receiving thread
+    bool shouldStopReceiver;
+    
     //! Sending sequence counter (the next to-be-send sequence id)
     uint8_t sendingSequence;
     
