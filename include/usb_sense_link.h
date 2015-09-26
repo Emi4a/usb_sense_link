@@ -85,7 +85,7 @@ private:
     int usb_fd;
     
     //! Module config
-    const lms::type::ModuleConfig* config;
+    const lms::ModuleConfig* config;
     
     //! Temporary buffer for incomming sensor data
     sense_link::Sensors receivingSensors;
